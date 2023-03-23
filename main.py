@@ -15,22 +15,25 @@ ck.set_appearance_mode("System")
 ck.set_default_color_theme("dark-blue.json")
 
 
-def hash_add(token, num, hash_tab: ck.CTkTabview):
+def hash_add(token, num, hash_tab: dict):
     with Client(token) as client:
-        r: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
+        request: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
         for i in range(num):
-            hash_tab.update({r.positions[i].figi: cast_money(r.positions[i].average_position_price)})
+            hash_tab.update({str(request.positions[i].figi): cast_money(request.positions[i].average_position_price)})
     return hash_tab
 
+def get_last_price(token: str, figi: str) -> float:
+    with Client(token) as client:
+        request: PortfolioResponse = client.market_data.get_last_prices(figi=[figi])
+        return cast_money(request.last_prices[0].price)
 
 def tinka(token: str, num: int) -> str:
     with Client(token) as client:
-        r: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
+        request: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
         return str(
-            f"""Тикет: {str(r.positions[num].figi)}\n Кол-во {str(r.positions[num].quantity.units)}
-            \n Цена за шт: {str(cast_money(r.positions[num].current_price))}
-            \n Стоимость всех: {str(round(cast_money(r.positions[num].current_price)
-                                          * cast_money(r.positions[num].quantity), 2))}""")
+            f"""Тикет: {str(figi:=request.positions[num].figi)}\n Кол-во {str(quantity:= request.positions[num].quantity.units)}
+            \n Цена за шт: {str(last_price:=get_last_price(token, figi))}
+            \n Стоимость всех: {str(round(last_price * cast_money(request.positions[num].quantity), 2))}""")
 
 
 def txt_file_read():
@@ -45,27 +48,27 @@ def txt_file_write(token: str):
 
 def count_tabs(token: str):
     with Client(token) as client:
-        r: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
-        return len(r.positions), [r.positions[i].figi for i in range(len(r.positions))]
+        request: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
+        return len(request.positions), [request.positions[i].figi for i in range(len(request.positions))]
 
 
 def balance(token):
     with Client(token) as client:
-        r: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
+        request: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
         return "Баланс: {0}".format(
-            str(round(cast_money(r.total_amount_bonds) + cast_money(r.total_amount_currencies), 2)))
+            str(round(cast_money(request.total_amount_bonds) + cast_money(request.total_amount_currencies), 2)))
 
 
 def all_figi(token):
     with Client(token) as client:
-        r: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
-        return [r.positions[i].figi for i in range(len(r.positions))]
+        request: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
+        return [request.positions[i].figi for i in range(len(request.positions))]
 
 
 def price_now(token, num):
     with Client(token) as client:
-        r: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
-        return cast_money(r.positions[num].current_price)
+        request: PortfolioResponse = client.operations.get_portfolio(account_id=account_id_func(token))
+        return cast_money(request.positions[num].current_price)
 
 
 def account_id_func(token_invest: str) -> str:
@@ -83,13 +86,15 @@ def check_token(token: str) -> bool:
         return False
 
 
-def tabs_add(tabview, x, data, token, hash_tmp):
+
+
+def tabs_add(tabview: ck.CTkTabview, x: int, data: list, token: str, hash_tmp: dict):
     if not hash_tmp:
         hash_tmp = hash_add(token, x, {})
     for i in range(x):
         try:
             tabview.add(f"{data[i]}")
-            label = ck.CTkLabel(tabview.tab(f"{data[i]}"), text=tinka(token, i), justify="left")
+            label = ck.CTkLabel(tabview.tab(f"{data[i]}"),text="Загрузка...", justify="left")
             label.pack(padx=20, pady=20)
             button_buy = ck.CTkButton(tabview.tab(f"{data[i]}"), text="Купить")
             button_sell = ck.CTkButton(tabview.tab(f"{data[i]}"), text="Продать")
